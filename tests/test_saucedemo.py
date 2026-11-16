@@ -1,6 +1,6 @@
 """Seis casos de prueba de la actividad S10. Ejecutar para obtener resultados reales."""
 import pytest
-from selenium.webdriver.common.by import By
+from urllib.parse import urlparse
 from config import USERNAME, PASSWORD
 from pages.login_page import LoginPage
 from pages.inventory_page import InventoryPage
@@ -9,59 +9,76 @@ from pages.checkout_page import CheckoutPage
 
 
 @pytest.mark.ui
-def test_cp01_login_valido(driver):
-    LoginPage(driver).open().login(USERNAME, PASSWORD)
-    assert '/inventory.html' in driver.current_url
-    assert InventoryPage(driver).text(InventoryPage.TITLE) == 'Products'
+def test_cp01_login_valido(driver, observed):
+    login = LoginPage(driver).open()
+    login.login(USERNAME, PASSWORD)
+    login.wait_path('/inventory.html')
+    observed.update(path=urlparse(driver.current_url).path,
+                    title=InventoryPage(driver).text(InventoryPage.TITLE))
+    assert observed['path'] == '/inventory.html'
+    assert observed['title'] == 'Products'
 
 
 @pytest.mark.ui
-def test_cp02_login_invalido(driver):
+def test_cp02_login_invalido(driver, observed):
     page = LoginPage(driver).open()
     page.login('usuario_invalido', 'clave_invalida')
-    assert 'do not match' in page.text(page.ERROR).lower()
-    assert '/inventory.html' not in driver.current_url
+    observed.update(error=page.text(page.ERROR), path=urlparse(driver.current_url).path)
+    assert observed['error'] == 'Epic sadface: Username and password do not match any user in this service'
+    assert observed['path'] == '/'
 
 
 @pytest.mark.ui
-def test_cp03_ordenar_precio_ascendente(logged_in):
+def test_cp03_ordenar_precio_ascendente(logged_in, observed):
     page = InventoryPage(logged_in)
     page.sort_low_to_high()
     prices = page.prices()
+    observed['prices'] = [str(price) for price in prices]
     assert len(prices) >= 2
     assert prices == sorted(prices)
 
 
 @pytest.mark.ui
-def test_cp04_agregar_al_carrito(logged_in):
+def test_cp04_agregar_al_carrito(logged_in, observed):
     inventory = InventoryPage(logged_in)
     inventory.add_backpack()
-    assert inventory.text(inventory.CART_BADGE) == '1'
+    observed['badge'] = inventory.text(inventory.CART_BADGE)
+    assert observed['badge'] == '1'
     inventory.open_cart()
-    assert 'Sauce Labs Backpack' in CartPage(logged_in).item_names()
+    cart = CartPage(logged_in)
+    cart.visible(cart.ITEM_NAMES)
+    observed['items'] = cart.item_names()
+    assert observed['items'] == ['Sauce Labs Backpack']
 
 
 @pytest.mark.ui
-def test_cp05_eliminar_del_carrito(logged_in):
+def test_cp05_eliminar_del_carrito(logged_in, observed):
     inventory = InventoryPage(logged_in)
     inventory.add_backpack()
     inventory.open_cart()
     cart = CartPage(logged_in)
-    assert 'Sauce Labs Backpack' in cart.item_names()
+    cart.visible(cart.ITEM_NAMES)
+    observed['before'] = cart.item_names()
+    assert observed['before'] == ['Sauce Labs Backpack']
     cart.remove_backpack()
-    assert 'Sauce Labs Backpack' not in cart.item_names()
-    assert len(logged_in.find_elements(By.CSS_SELECTOR, '[data-test="shopping-cart-badge"]')) == 0
+    cart.absent(inventory.CART_BADGE)
+    observed.update(after=cart.item_names(), badge_count=len(logged_in.find_elements(*inventory.CART_BADGE)))
+    assert observed['after'] == []
+    assert observed['badge_count'] == 0
 
 
 @pytest.mark.ui
-def test_cp06_completar_compra(logged_in):
+def test_cp06_completar_compra(logged_in, observed):
     inventory = InventoryPage(logged_in)
     inventory.add_backpack()
     inventory.open_cart()
     CartPage(logged_in).checkout()
     checkout = CheckoutPage(logged_in)
     checkout.enter_information('Prueba', 'Academica', '10101')
-    assert '/checkout-step-two.html' in logged_in.current_url
+    observed['overview_path'] = urlparse(logged_in.current_url).path
+    assert observed['overview_path'] == '/checkout-step-two.html'
     checkout.finish()
-    assert '/checkout-complete.html' in logged_in.current_url
-    assert checkout.text(checkout.COMPLETE_HEADER) == 'Thank you for your order!'
+    observed.update(path=urlparse(logged_in.current_url).path,
+                    message=checkout.text(checkout.COMPLETE_HEADER))
+    assert observed['path'] == '/checkout-complete.html'
+    assert observed['message'] == 'Thank you for your order!'

@@ -15,6 +15,8 @@ class CheckoutPage(BasePage):
         self.visible(self.LAST_NAME).send_keys(last_name)
         self.visible(self.POSTAL_CODE).send_keys(postal_code)
         self.click(self.CONTINUE)
+        self.wait_path('/checkout-step-two.html')
 
     def finish(self):
         self.click(self.FINISH)
+        self.wait_path('/checkout-complete.html')

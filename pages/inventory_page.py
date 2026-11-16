@@ -1,5 +1,6 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
+from decimal import Decimal
 from .base_page import BasePage
 
 
@@ -13,13 +14,15 @@ class InventoryPage(BasePage):
 
     def sort_low_to_high(self):
         Select(self.visible(self.SORT)).select_by_value('lohi')
+        self.wait.until(lambda d: len(self.prices()) >= 2 and self.prices() == sorted(self.prices()))
 
     def prices(self):
         self.visible(self.PRICES)
-        return [float(el.text.replace('$', '').strip()) for el in self.driver.find_elements(*self.PRICES)]
+        return [Decimal(el.text.replace('$', '').strip()) for el in self.driver.find_elements(*self.PRICES)]
 
     def add_backpack(self):
         self.click(self.ADD_BACKPACK)
 
     def open_cart(self):
         self.click(self.CART)
+        self.wait_path('/cart.html')
